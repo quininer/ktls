@@ -1,0 +1,9 @@
+[package]
+name = "rusktls"
+version = "0.1.0"
+authors = ["quininer <quininer@live.com>"]
+edition = "2018"
+
+[dependencies]
+libc = "*"
+rustls = { git = "https://github.com/quininer/rustls", branch = "ktls" }
