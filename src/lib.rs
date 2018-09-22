@@ -2,12 +2,30 @@ pub mod sys;
 
 use std::{ error, fmt };
 use std::io::{ self, Read, Write };
-use std::os::unix::io::{ RawFd, AsRawFd };
+use std::os::unix::io::AsRawFd;
 pub use crate::sys::tls12_crypto_info_aes_gcm_128 as Tls12CryptoInfoAesGcm128;
 
 
+#[derive(Debug)]
 pub struct KtlsStream<IO> {
     io: IO
+}
+
+impl<IO> KtlsStream<IO> {
+    #[inline]
+    pub fn get_ref(&self) -> &IO {
+        &self.io
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self) -> &mut IO {
+        &mut self.io
+    }
+
+    #[inline]
+    pub fn into_inner(self) -> IO {
+        self.io
+    }
 }
 
 impl<IO> KtlsStream<IO>
@@ -27,17 +45,6 @@ where
     }
 }
 
-impl<IO: Read> Read for KtlsStream<IO> {
-    #[cfg(feature = "nightly")]
-    unsafe fn initializer(&self) -> Initializer {
-        Initializer::nop()
-    }
-
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.io.read(buf)
-    }
-}
-
 /// TODO(quininer) need buff_size
 ///
 /// TLS records are created and sent after each send() call, unless MSG_MORE is passed. MSG_MORE
@@ -52,13 +59,6 @@ impl<IO: Write> Write for KtlsStream<IO> {
         self.io.flush()
     }
 }
-
-impl<IO: AsRawFd> AsRawFd for KtlsStream<IO> {
-    fn as_raw_fd(&self) -> RawFd {
-        self.io.as_raw_fd()
-    }
-}
-
 
 #[derive(Debug)]
 pub struct Error<IO> {

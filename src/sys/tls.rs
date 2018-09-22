@@ -53,7 +53,7 @@ fn bindgen_test_layout_tls_crypto_info() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct tls12_crypto_info_aes_gcm_128 {
     pub info: tls_crypto_info,
     pub iv: [libc::c_uchar; 8usize],
