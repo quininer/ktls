@@ -6,4 +6,6 @@ edition = "2018"
 
 [dependencies]
 libc = "*"
+
+[dev-dependencies]
 rustls = { git = "https://github.com/quininer/rustls", branch = "ktls" }

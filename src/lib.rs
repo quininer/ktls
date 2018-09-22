@@ -14,9 +14,11 @@ impl<IO> KtlsStream<IO>
 where
     IO: Read + Write + AsRawFd
 {
-    pub fn new(mut io: IO, info: &Tls12CryptoInfoAesGcm128) -> Result<KtlsStream<IO>, Error<IO>> {
+    pub fn new(mut io: IO, tx: &Tls12CryptoInfoAesGcm128, rx: &Tls12CryptoInfoAesGcm128)
+        -> Result<KtlsStream<IO>, Error<IO>>
+    {
         unsafe {
-            if let Err(error) = sys::ktls_start(&mut io, info) {
+            if let Err(error) = sys::ktls_start(&mut io, tx, rx) {
                 return Err(Error { error, io });
             }
         }
