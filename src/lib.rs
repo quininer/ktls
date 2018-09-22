@@ -36,7 +36,7 @@ where
         -> Result<KtlsStream<IO>, Error<IO>>
     {
         unsafe {
-            if let Err(error) = sys::ktls_start(&mut io, tx, rx) {
+            if let Err(error) = sys::start(&mut io, tx, rx) {
                 return Err(Error { error, io });
             }
         }

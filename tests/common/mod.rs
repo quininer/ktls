@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::io::{ self, Read, Write };
+use std::io::{ self, Read, Write, BufRead };
 use std::net::TcpStream;
 use rustls::{ ALL_CIPHERSUITES, Session, ClientSession, ClientConfig };
 use webpki::DNSNameRef;
@@ -8,14 +8,17 @@ use ktls::{ KtlsStream, Tls12CryptoInfoAesGcm128 };
 
 pub struct Stream {
     session: ClientSession,
-    io: KtlsStream<TcpStream>
+    pub io: KtlsStream<TcpStream>
 }
 
 impl Stream {
-    pub fn new(hostname: &str, port: u16) -> io::Result<Self> {
+    pub fn new(hostname: &str, port: u16, pem: Option<Box<BufRead>>) -> io::Result<Self> {
         let dnsname = DNSNameRef::try_from_ascii_str(hostname).unwrap();
 
         let mut config = ClientConfig::new();
+        if let Some(mut pem) = pem {
+            config.root_store.add_pem_file(&mut pem).unwrap();
+        }
         config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
         config.ciphersuites.clear();
         config.ciphersuites.push(ALL_CIPHERSUITES[6]);
@@ -24,13 +27,16 @@ impl Stream {
         let sock = TcpStream::connect(format!("{}:{}", hostname, port))?;
         let sess = ClientSession::new(&Arc::new(config), dnsname);
 
-
         Stream::handshake(sess, sock)
     }
 
     pub fn handshake(mut sess: ClientSession, mut sock: TcpStream) -> io::Result<Stream> {
         loop {
             sess.complete_io(&mut sock)?;
+
+            if sess.wants_write() {
+                sess.complete_io(&mut sock)?;
+            }
 
             if let Some(secrets) = sess.get_secrets() {
                 let proto = sess.get_protocol_version().unwrap();

@@ -13,7 +13,30 @@ pub const SOL_TLS: libc::c_int = 282;
 pub const TLS_1_2_VERSION: libc::c_uint = 0x0303;
 
 
-pub unsafe fn ktls_start<Fd: AsRawFd>(
+macro_rules! cmsg {
+    ( align $len:expr ) => {
+        ($len + mem::size_of::<libc::size_t>() - 1) &
+            !(mem::size_of::<libc::size_t>() - 1)
+    };
+    ( space $len:expr ) => {
+        cmsg!(align $len) + cmsg!(align mem::size_of::<libc::cmsghdr>())
+    };
+    ( firsthdr $mhdr:expr ) => {
+        if $mhdr.msg_controllen >= mem::size_of::<libc::cmsghdr>() {
+            $mhdr.msg_control as *mut _
+        } else {
+            ptr::null_mut()
+        }
+    };
+    ( data $cmsg:expr ) => {
+        $cmsg.add(1) as *mut u8
+    };
+    ( len $len:expr ) => {
+        cmsg!(align mem::size_of::<libc::cmsghdr>()) + $len
+    }
+}
+
+pub unsafe fn start<Fd: AsRawFd>(
     socket: &mut Fd,
     tx: &tls12_crypto_info_aes_gcm_128,
     _rx: &tls12_crypto_info_aes_gcm_128
@@ -39,13 +62,36 @@ pub unsafe fn ktls_start<Fd: AsRawFd>(
     Ok(())
 }
 
-pub unsafe fn ktls_send_ctrl_message<Fd: AsRawFd>(socket: &mut Fd, record_type: u8, data: &[u8])
+pub unsafe fn send_ctrl_message<Fd: AsRawFd>(socket: &mut Fd, record_type: u8, data: &[u8])
     -> io::Result<usize>
 {
-    unimplemented!()
+    const CMSG_LEN: usize = mem::size_of::<u8>();
+
+    let mut msg: libc::msghdr = mem::zeroed();
+    let mut buf = [0; cmsg!(space CMSG_LEN)];
+    let mut msg_iov: libc::iovec = mem::uninitialized();
+
+    msg.msg_control = buf.as_mut_ptr() as *mut _;
+    msg.msg_controllen = mem::size_of_val(&buf);
+    let cmsg: *mut libc::cmsghdr = cmsg!(firsthdr &msg);
+    (*cmsg).cmsg_level = SOL_TLS;
+    (*cmsg).cmsg_type = TLS_SET_RECORD_TYPE as _;
+    (*cmsg).cmsg_len = cmsg!(len CMSG_LEN);
+    *cmsg!(data cmsg) = record_type;
+    msg.msg_controllen = (*cmsg).cmsg_len;
+
+    msg_iov.iov_base = data.as_ptr() as *mut _;
+    msg_iov.iov_len = data.len() as _;
+    msg.msg_iov = &mut msg_iov;
+    msg.msg_iovlen = 1;
+
+    match libc::sendmsg(socket.as_raw_fd(), &msg, 0) {
+        -1 => Err(io::Error::last_os_error()),
+        n => Ok(n as _)
+    }
 }
 
-pub unsafe fn ktls_recv_ctrl_message() {
+pub unsafe fn recv_ctrl_message() {
     unimplemented!()
 }
 
