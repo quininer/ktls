@@ -6,6 +6,6 @@ edition = "2018"
 
 [dependencies]
 tokio = "*"
-rustls = { git = "https://github.com/quininer/rustls", branch = "ktls" }
-ktls = { git = "https://github.com/quininer/ktls" }
+rustls = "*"
+ktls = { path = ".." }
 if_chain = "*"

@@ -14,6 +14,20 @@ pub struct KtlsStream<IO, S> {
     is_shutdown: bool
 }
 
+impl<IO, S> KtlsStream<IO, S> {
+    pub fn get_ref(&self) -> (&InnerStream<IO>, &S) {
+        (&self.io, &self.session)
+    }
+
+    pub fn get_mut(&mut self) -> (&mut InnerStream<IO>, &mut S) {
+        (&mut self.io, &mut self.session)
+    }
+
+    pub fn into_inner(self) -> (InnerStream<IO>, S) {
+        (self.io, self.session)
+    }
+}
+
 impl<IO, S> KtlsStream<IO, S>
 where
     IO: Read + Write + AsRawFd,

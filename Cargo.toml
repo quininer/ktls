@@ -14,4 +14,11 @@ byteorder = "*"
 [dev-dependencies]
 webpki = "*"
 webpki-roots = "*"
+tokio = "*"
+rustls = "*"
+tokio-rustls = "0.8.0-alpha"
+tokio-rusktls = { path = "tokio-rusktls" }
+
+[patch.crates-io]
+tokio-rustls = { git = "https://github.com/quininer/tokio-rustls", branch = "new-api" }
 rustls = { git = "https://github.com/quininer/rustls", branch = "ktls" }

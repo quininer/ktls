@@ -1,9 +1,12 @@
-mod common;
-
+use std::sync::Arc;
 use std::sync::mpsc::Receiver;
-use std::io::{ self, BufReader, Cursor };
-use std::net::{ TcpListener, Shutdown, SocketAddr };
-use rustls::{ Session, ServerSession, ServerConfig, TLSError };
+use std::io::{ BufReader, Cursor };
+use std::net::{ TcpListener, SocketAddr };
+use tokio::prelude::*;
+use tokio::net::TcpStream;
+use tokio::runtime::current_thread;
+use webpki::DNSNameRef;
+use rustls::{ ALL_CIPHERSUITES, Session, ServerSession, ServerConfig, ClientConfig, TLSError };
 use rustls::internal::msgs::{
     alert::AlertMessagePayload,
     message::{
@@ -17,11 +20,12 @@ use rustls::internal::msgs::{
         AlertDescription
     }
 };
-use self::common::Stream;
+use tokio_rustls::TlsConnector;
+use tokio_rusktls::KtlsStream;
 
 
 #[test]
-fn test_alert() -> io::Result<()> {
+fn test_alert() {
     fn run_rustls() -> (SocketAddr, &'static str, &'static str, Receiver<TLSError>) {
         use std::thread;
         use std::sync::Arc;
@@ -54,7 +58,6 @@ fn test_alert() -> io::Result<()> {
             let mut sess = ServerSession::new(&config);
 
             sess.complete_io(&mut sock).unwrap();
-
             if sess.wants_write() {
                 sess.complete_io(&mut sock).unwrap();
             }
@@ -70,9 +73,16 @@ fn test_alert() -> io::Result<()> {
     }
 
     let (addr, hostname, chain, recv2) = run_rustls();
-    let chain = BufReader::new(Cursor::new(chain));
+    let mut chain = BufReader::new(Cursor::new(chain));
 
-    let mut stream = Stream::new(hostname, addr.port(), Some(Box::new(chain) as Box<_>))?;
+    let dnsname = DNSNameRef::try_from_ascii_str(hostname).unwrap();
+    let mut config = ClientConfig::new();
+    config.root_store.add_pem_file(&mut chain).unwrap();
+    config.ciphersuites.clear();
+    config.ciphersuites.push(ALL_CIPHERSUITES[6]);
+    config.ciphersuites.push(ALL_CIPHERSUITES[8]);
+    let config = Arc::new(config);
+    let connector = TlsConnector::from(config);
 
     let record = Message {
         typ: ContentType::Alert,
@@ -83,18 +93,25 @@ fn test_alert() -> io::Result<()> {
         })
     };
 
-    unsafe {
-        ktls::sys::send_ctrl_message(
-            stream.io.get_mut(),
-            ContentType::Alert.get_u8(),
-            &record.take_payload()
-        )?;
-    }
+    let done = TcpStream::connect(&addr)
+        .and_then(move |sock| connector.connect(dnsname, sock))
+        .and_then(|stream| {
+            let (io, session) = stream.into_inner();
+            KtlsStream::new(io, session)
+                .map_err(|err| err.error)
+        })
+        .and_then(|stream| unsafe {
+            let (mut io, _) = stream.into_inner();
 
-    stream.io.get_mut().shutdown(Shutdown::Both)?;
+            ktls::sys::send_ctrl_message(
+                io.get_mut(),
+                ContentType::Alert.get_u8(),
+                &record.take_payload()
+            )
+        });
+
+    current_thread::block_on_all(done).unwrap();
 
     let err = recv2.recv().unwrap();
     assert_eq!(err, TLSError::AlertReceived(AlertDescription::InternalError));
-
-    Ok(())
 }
