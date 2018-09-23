@@ -64,7 +64,7 @@ impl Read for Stream {
             self.session.read_tls(&mut self.io.get_mut())?;
             self.session.process_new_packets()
                 .map_err(|err| {
-                    let _ = self.flush();
+                    let _ = self.io.flush();
                     io::Error::new(io::ErrorKind::InvalidData, err)
                 })?;
         }
