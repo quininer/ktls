@@ -37,7 +37,7 @@ where
     {
         unsafe {
             if let Err(error) = sys::start(&mut io, tx, rx) {
-                return Err(Error { error, io });
+                return Err(Error { error, inner: io });
             }
         }
 
@@ -61,24 +61,24 @@ impl<IO: Write> Write for KtlsStream<IO> {
 }
 
 #[derive(Debug)]
-pub struct Error<IO> {
+pub struct Error<T> {
     pub error: io::Error,
-    pub io: IO
+    pub inner: T
 }
 
-impl<IO> fmt::Display for Error<IO> {
+impl<T> fmt::Display for Error<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.error.fmt(f)
     }
 }
 
-impl<IO: fmt::Debug> error::Error for Error<IO> {
+impl<T: fmt::Debug> error::Error for Error<T> {
     fn description(&self) -> &str {
         self.error.description()
     }
 
     fn cause(&self) -> Option<&error::Error> {
-        Some(&self.error)
+        self.source()
     }
 
     fn source(&self) -> Option<&(error::Error + 'static)> {
