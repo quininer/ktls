@@ -8,14 +8,14 @@ edition = "2018"
 members = [ "tokio-rusktls" ]
 
 [dependencies]
-libc = "*"
-byteorder = "*"
+libc = "0.2"
+byteorder = "1"
 
 [dev-dependencies]
-webpki = "*"
-webpki-roots = "*"
-tokio = "*"
-rustls = "*"
+webpki = "0.18"
+webpki-roots = "0.15"
+tokio = "0.1"
+rustls = "=0.13.0"
 tokio-rustls = "0.8.0-alpha"
 tokio-rusktls = { path = "tokio-rusktls" }
 

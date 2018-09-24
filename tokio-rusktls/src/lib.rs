@@ -111,7 +111,7 @@ impl<IO: AsRawFd, S> KtlsStream<IO, S> {
 
 impl<IO, S> Read for KtlsStream<IO, S>
 where
-    IO: Read + Write,
+    IO: Read + Write + AsRawFd,
     S: Session
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -126,7 +126,11 @@ where
 
         match self.session.read(buf) {
             Ok(n) => Ok(n),
-            Err(ref e) if e.kind() == io::ErrorKind::ConnectionAborted => Ok(0),
+            Err(ref e) if e.kind() == io::ErrorKind::ConnectionAborted => {
+                self.is_shutdown = true;
+                let _ = self.send_close_notify();
+                Ok(0)
+            },
             Err(e) => Err(e)
         }
     }
@@ -146,7 +150,7 @@ impl<IO: Write, S> Write for KtlsStream<IO, S> {
 
 impl<IO, S> AsyncRead for KtlsStream<IO, S>
 where
-    IO: AsyncRead + AsyncWrite,
+    IO: AsyncRead + AsyncWrite + AsRawFd,
     S: Session
 {
     unsafe fn prepare_uninitialized_buffer(&self, _: &mut [u8]) -> bool {

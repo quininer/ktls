@@ -5,7 +5,7 @@ authors = ["quininer <quininer@live.com>"]
 edition = "2018"
 
 [dependencies]
-tokio = "*"
-rustls = "*"
+tokio = "0.1"
+rustls = "=0.13.0"
 ktls = { path = ".." }
-if_chain = "*"
+if_chain = "0.1"
