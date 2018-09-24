@@ -1,13 +1,14 @@
-use std::sync::Arc;
+mod common;
+
 use std::net::ToSocketAddrs;
 use webpki::DNSNameRef;
 use tokio::prelude::*;
 use tokio::io as aio;
 use tokio::net::TcpStream;
 use tokio::runtime::current_thread;
-use rustls::{ ALL_CIPHERSUITES, ClientConfig };
 use tokio_rustls::TlsConnector;
 use tokio_rusktls::KtlsStream;
+use self::common::get_client_config;
 
 
 #[test]
@@ -20,13 +21,7 @@ fn test_tls12() {
         .to_socket_addrs().unwrap()
         .next().unwrap();
 
-    let mut config = ClientConfig::new();
-    config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
-    config.ciphersuites.clear();
-    config.ciphersuites.push(ALL_CIPHERSUITES[6]);
-    config.ciphersuites.push(ALL_CIPHERSUITES[8]);
-    let config = Arc::new(config);
-    let connector = TlsConnector::from(config);
+    let connector = TlsConnector::from(get_client_config());
 
     let text = format!("\
         GET / HTTP/1.0\r\n\

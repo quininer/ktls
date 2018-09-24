@@ -1,12 +1,13 @@
-use std::sync::Arc;
-use std::sync::mpsc::Receiver;
-use std::io::{ BufReader, Cursor };
+mod common;
+
+use std::thread;
+use std::sync::mpsc::{ channel, Receiver };
 use std::net::{ TcpListener, SocketAddr };
 use tokio::prelude::*;
 use tokio::net::TcpStream;
 use tokio::runtime::current_thread;
 use webpki::DNSNameRef;
-use rustls::{ ALL_CIPHERSUITES, Session, ServerSession, ServerConfig, ClientConfig, TLSError };
+use rustls::{ Session, ServerSession, TLSError };
 use rustls::internal::msgs::{
     alert::AlertMessagePayload,
     message::{
@@ -22,27 +23,13 @@ use rustls::internal::msgs::{
 };
 use tokio_rustls::TlsConnector;
 use tokio_rusktls::KtlsStream;
+use self::common::{ get_server_config, get_client_config };
 
 
 #[test]
 fn test_alert() {
-    fn run_rustls() -> (SocketAddr, &'static str, &'static str, Receiver<TLSError>) {
-        use std::thread;
-        use std::sync::Arc;
-        use std::sync::mpsc::channel;
-        use rustls::internal::pemfile::{ certs, rsa_private_keys };
-
-        const CERT: &str = include_str!("common/end.cert");
-        const CHAIN: &str = include_str!("common/end.chain");
-        const RSA: &str = include_str!("common/end.rsa");
-
-        let cert = certs(&mut BufReader::new(Cursor::new(CERT))).unwrap();
-        let mut keys = rsa_private_keys(&mut BufReader::new(Cursor::new(RSA))).unwrap();
-
-        let mut config = ServerConfig::new(rustls::NoClientAuth::new());
-        config.set_single_cert(cert, keys.pop().unwrap())
-            .expect("invalid key or certificate");
-        let config = Arc::new(config);
+    fn run_server() -> (SocketAddr, Receiver<TLSError>) {
+        let config = get_server_config();
 
         let (send, recv) = channel();
         let (send2, recv2) = channel();
@@ -69,20 +56,13 @@ fn test_alert() {
         });
 
         let addr = recv.recv().unwrap();
-        (addr, "localhost", CHAIN, recv2)
+        (addr, recv2)
     }
 
-    let (addr, hostname, chain, recv2) = run_rustls();
-    let mut chain = BufReader::new(Cursor::new(chain));
+    let (addr, recv2) = run_server();
 
-    let dnsname = DNSNameRef::try_from_ascii_str(hostname).unwrap();
-    let mut config = ClientConfig::new();
-    config.root_store.add_pem_file(&mut chain).unwrap();
-    config.ciphersuites.clear();
-    config.ciphersuites.push(ALL_CIPHERSUITES[6]);
-    config.ciphersuites.push(ALL_CIPHERSUITES[8]);
-    let config = Arc::new(config);
-    let connector = TlsConnector::from(config);
+    let dnsname = DNSNameRef::try_from_ascii_str("localhost").unwrap();
+    let connector = TlsConnector::from(get_client_config());
 
     let record = Message {
         typ: ContentType::Alert,

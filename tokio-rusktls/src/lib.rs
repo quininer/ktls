@@ -1,7 +1,7 @@
 pub mod sendfile;
 
 use std::io::{ self, Read, Write };
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{ AsRawFd, RawFd };
 use tokio::prelude::*;
 use tokio::io::{ AsyncRead, AsyncWrite };
 use rustls::{ Session, ClientSession, ServerSession };
@@ -120,13 +120,16 @@ where
     S: Session
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.session.wants_read() {
-            self.session.read_tls(&mut self.io.get_mut())?;
+        while self.session.wants_read() {
+            let n = self.session.read_tls(&mut self.io.get_mut())?;
             self.session.process_new_packets()
                 .map_err(|err| {
                     let _ = self.io.flush();
                     io::Error::new(io::ErrorKind::InvalidData, err)
                 })?;
+            if n == 0 {
+                break
+            }
         }
 
         match self.session.read(buf) {
@@ -190,6 +193,12 @@ impl<IO, S> AsyncWrite for KtlsStream<IO, S>
     }
 }
 
+impl<IO: AsRawFd, S> AsRawFd for KtlsStream<IO, S> {
+    #[inline]
+    fn as_raw_fd(&self) -> RawFd {
+        self.io.as_raw_fd()
+    }
+}
 
 pub trait IsClient: Session {
     const FLAG: bool;

@@ -61,7 +61,7 @@ impl<IO: AsRawFd> Future for SendFile<IO> {
             mem::replace(&mut self.0, Ok(State::End))?;
         }
 
-        match &mut self.0 {
+        match self.0.as_mut() {
             Ok(State::Writing { io, fd, ref mut offset, ref mut count }) => unsafe {
                 while *count > 0 {
                     match sendfile2(io.as_raw_fd(), fd.as_raw_fd(), offset, *count) {

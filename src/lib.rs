@@ -2,7 +2,7 @@ pub mod sys;
 
 use std::{ error, fmt };
 use std::io::{ self, Read, Write };
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{ AsRawFd, RawFd };
 pub use crate::sys::tls12_crypto_info_aes_gcm_128 as Tls12CryptoInfoAesGcm128;
 
 
@@ -57,6 +57,13 @@ impl<IO: Write> Write for KtlsStream<IO> {
 
     fn flush(&mut self) -> io::Result<()> {
         self.io.flush()
+    }
+}
+
+impl<IO: AsRawFd> AsRawFd for KtlsStream<IO> {
+    #[inline]
+    fn as_raw_fd(&self) -> RawFd {
+        self.io.as_raw_fd()
     }
 }
 
