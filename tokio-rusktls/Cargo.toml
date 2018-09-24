@@ -5,6 +5,7 @@ authors = ["quininer <quininer@live.com>"]
 edition = "2018"
 
 [dependencies]
+libc = "0.2"
 tokio = "0.1"
 rustls = "=0.13.0"
 ktls = { path = ".." }

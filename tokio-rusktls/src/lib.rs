@@ -1,3 +1,5 @@
+pub mod sendfile;
+
 use std::io::{ self, Read, Write };
 use std::os::unix::io::AsRawFd;
 use tokio::prelude::*;
@@ -15,14 +17,17 @@ pub struct KtlsStream<IO, S> {
 }
 
 impl<IO, S> KtlsStream<IO, S> {
+    #[inline]
     pub fn get_ref(&self) -> (&InnerStream<IO>, &S) {
         (&self.io, &self.session)
     }
 
+    #[inline]
     pub fn get_mut(&mut self) -> (&mut InnerStream<IO>, &mut S) {
         (&mut self.io, &mut self.session)
     }
 
+    #[inline]
     pub fn into_inner(self) -> (InnerStream<IO>, S) {
         (self.io, self.session)
     }
