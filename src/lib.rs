@@ -1,17 +1,21 @@
 pub mod sys;
+pub mod codec;
 
 use std::{ error, fmt };
 use std::io::{ self, Read, Write };
 use std::os::unix::io::{ AsRawFd, RawFd };
+use std::marker::PhantomData;
+use crate::codec::{ Record, Level, Alert };
 pub use crate::sys::tls12_crypto_info_aes_gcm_128 as Tls12CryptoInfoAesGcm128;
 
 
 #[derive(Debug)]
-pub struct KtlsStream<IO> {
-    io: IO
+pub struct KtlsStream<IO, R> {
+    io: IO,
+    _phantom: PhantomData<R>
 }
 
-impl<IO> KtlsStream<IO> {
+impl<IO, R> KtlsStream<IO, R> {
     #[inline]
     pub fn get_ref(&self) -> &IO {
         &self.io
@@ -28,12 +32,13 @@ impl<IO> KtlsStream<IO> {
     }
 }
 
-impl<IO> KtlsStream<IO>
+impl<IO, R> KtlsStream<IO, R>
 where
-    IO: Read + Write + AsRawFd
+    IO: Read + Write + AsRawFd,
+    R: Record
 {
     pub fn new(mut io: IO, tx: &Tls12CryptoInfoAesGcm128, rx: &Tls12CryptoInfoAesGcm128)
-        -> Result<KtlsStream<IO>, Error<IO>>
+        -> Result<KtlsStream<IO, R>, Error<IO>>
     {
         unsafe {
             if let Err(error) = sys::start(&mut io, tx, rx) {
@@ -41,7 +46,21 @@ where
             }
         }
 
-        Ok(KtlsStream { io })
+        Ok(KtlsStream { io, _phantom: PhantomData })
+    }
+}
+
+impl<IO: AsRawFd, R: Record> KtlsStream<IO, R> {
+    pub fn send_close_notify(&mut self) -> io::Result<()> {
+        const ALERT: u8 = 0x15;
+
+        let record = R::build(Level::Fatal, Alert::CloseNotify);
+
+        unsafe {
+            sys::send_ctrl_message(&mut self.io, ALERT, &record)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -50,7 +69,7 @@ where
 /// TLS records are created and sent after each send() call, unless MSG_MORE is passed. MSG_MORE
 /// will delay creation of a record until MSG_MORE is not passed, or the maximum record size is
 /// reached or an alert record needs to be sent.
-impl<IO: Write> Write for KtlsStream<IO> {
+impl<IO: Write, R> Write for KtlsStream<IO, R> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.io.write(buf)
     }
@@ -60,7 +79,37 @@ impl<IO: Write> Write for KtlsStream<IO> {
     }
 }
 
-impl<IO: AsRawFd> AsRawFd for KtlsStream<IO> {
+impl<IO, R> Read for KtlsStream<IO, R>
+where
+    IO: Read + AsRawFd,
+    R: Record
+{
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self.io.read(buf) {
+            Ok(n) => Ok(n),
+            Err(ref err) if err.raw_os_error() == Some(5) => {
+                let mut buf2 = [0; 16 * 1024];
+                let n = unsafe {
+                    sys::recv_ctrl_message(&mut self.io, &mut buf2)?
+                };
+
+                match R::check(&buf2[..n])? {
+                    Some((Level::Fatal, Alert::CloseNotify)) => {
+                        let _ = self.send_close_notify();
+                        return Ok(0);
+                    },
+                    Some((Level::Fatal, _)) => return Ok(0),
+                    _ => ()
+                }
+
+                self.io.read(buf)
+            },
+            Err(err) => Err(err)
+        }
+    }
+}
+
+impl<IO: AsRawFd, R> AsRawFd for KtlsStream<IO, R> {
     #[inline]
     fn as_raw_fd(&self) -> RawFd {
         self.io.as_raw_fd()

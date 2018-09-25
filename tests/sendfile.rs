@@ -28,8 +28,8 @@ fn test_sendfile() {
             let done = listener.incoming()
                 .and_then(|sock| acceptor.accept(sock))
                 .and_then(|stream| {
-                    let (io, session) = stream.into_inner();
-                    KtlsStream::new(io, session)
+                    let (io, mut session) = stream.into_inner();
+                    KtlsStream::new(io, &mut session)
                         .map_err(|err| err.error)
                 })
                 .and_then(|stream| aio::read_exact(stream, [0; 3]))

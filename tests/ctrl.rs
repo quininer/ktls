@@ -76,12 +76,12 @@ fn test_alert() {
     let done = TcpStream::connect(&addr)
         .and_then(move |sock| connector.connect(dnsname, sock))
         .and_then(|stream| {
-            let (io, session) = stream.into_inner();
-            KtlsStream::new(io, session)
+            let (io, mut session) = stream.into_inner();
+            KtlsStream::new(io, &mut session)
                 .map_err(|err| err.error)
         })
         .and_then(|stream| unsafe {
-            let (mut io, _) = stream.into_inner();
+            let mut io = stream.into_inner();
 
             ktls::sys::send_ctrl_message(
                 io.get_mut(),
