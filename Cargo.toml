@@ -2,6 +2,9 @@
 name = "ktls"
 version = "0.1.0"
 authors = ["quininer <quininer@live.com>"]
+license = "MIT"
+description = "Linux Kernel TLS for Rust."
+categories = ["cryptography", "network-programming"]
 edition = "2018"
 
 [workspace]

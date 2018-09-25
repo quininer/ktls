@@ -2,6 +2,9 @@
 name = "tokio-rusktls"
 version = "0.1.0"
 authors = ["quininer <quininer@live.com>"]
+license = "MIT"
+description = "Rustls + KTLS support for Tokio."
+categories = ["asynchronous", "cryptography", "network-programming"]
 edition = "2018"
 
 [dependencies]
