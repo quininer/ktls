@@ -9,6 +9,7 @@ edition = "2018"
 
 [dependencies]
 libc = "0.2"
+bytes = "0.4"
 tokio = "0.1"
 rustls = "=0.13.0"
 ktls = { path = ".." }

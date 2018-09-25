@@ -5,7 +5,7 @@ This will allow us to implement performance optimizations that were previously i
 
 ### Usage
 
-First we need to make sure that kernel module is enabled.
+First we need to make sure that kernel module is enabled
 
 ```
 > sudo modprobe tls
@@ -13,7 +13,7 @@ First we need to make sure that kernel module is enabled.
 ...
 ```
 
-Then we need to use rustls to handshake.
+Then we need to use rustls to handshake
 
 ```rust
 use tokio_rustls::TlsConnector;

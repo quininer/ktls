@@ -2,6 +2,7 @@ pub mod sendfile;
 
 use std::io::{ self, Read, Write };
 use std::os::unix::io::{ AsRawFd, RawFd };
+use bytes::Buf;
 use tokio::prelude::*;
 use tokio::io::{ AsyncRead, AsyncWrite };
 use rustls::{ Session, ClientSession, ServerSession };
@@ -171,6 +172,10 @@ impl<IO, S> AsyncWrite for KtlsStream<IO, S>
         IO: AsyncRead + AsyncWrite + AsRawFd,
         S: Session
 {
+    fn write_buf<B: Buf>(&mut self, buf: &mut B) -> Poll<usize, io::Error> {
+        self.io.get_mut().write_buf(buf)
+    }
+
     fn shutdown(&mut self) -> Poll<(), io::Error> {
         macro_rules! try_async {
             ( $op:expr ) => {
