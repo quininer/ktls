@@ -32,7 +32,9 @@ fn test_sendfile() {
                     KtlsStream::new(io, session)
                         .map_err(|err| err.error)
                 })
-                .and_then(|stream| {
+                .and_then(|stream| aio::read_exact(stream, [0; 3]))
+                .and_then(|(stream, buf)| {
+                    assert_eq!(&buf, b"aaa");
                     let fd = fs::File::open("Cargo.toml").unwrap();
                     ktls::sendfile(stream, fd, ..22)
                 })
@@ -56,7 +58,8 @@ fn test_sendfile() {
 
     let done = TcpStream::connect(&addr)
         .and_then(move |sock| connector.connect(dnsname, sock))
-        .and_then(|stream| aio::read_to_end(stream, Vec::new()))
+        .and_then(|stream| aio::write_all(stream, b"aaa"))
+        .and_then(|(stream, _)| aio::read_to_end(stream, Vec::new()))
         .map(|(_, buf)| buf);
 
     let buf2 = current_thread::block_on_all(done).unwrap();

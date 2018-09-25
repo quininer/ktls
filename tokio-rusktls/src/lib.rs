@@ -6,6 +6,20 @@ use bytes::Buf;
 use tokio::prelude::*;
 use tokio::io::{ AsyncRead, AsyncWrite };
 use rustls::{ Session, ClientSession, ServerSession };
+use rustls::internal::msgs::{
+    codec::Codec,
+    alert::AlertMessagePayload,
+    message::{
+        Message,
+        MessagePayload
+    },
+    enums::{
+        ContentType,
+        ProtocolVersion,
+        AlertLevel,
+        AlertDescription
+    }
+};
 use if_chain::if_chain;
 use ktls::{ KtlsStream as InnerStream, Tls12CryptoInfoAesGcm128 };
 
@@ -80,28 +94,10 @@ where
 
 impl<IO: AsRawFd, S> KtlsStream<IO, S> {
     pub fn send_close_notify(&mut self) -> io::Result<()> {
-        use rustls::internal::msgs::{
-            alert::AlertMessagePayload,
-            message::{
-                Message,
-                MessagePayload
-            },
-            enums::{
-                ContentType,
-                ProtocolVersion,
-                AlertLevel,
-                AlertDescription
-            }
-        };
-
-        let record = Message {
-            typ: ContentType::Alert,
-            version: ProtocolVersion::TLSv1_2,
-            payload: MessagePayload::Alert(AlertMessagePayload {
-                level: AlertLevel::Fatal,
-                description: AlertDescription::CloseNotify
-            })
-        };
+        let record = Message::build_alert(
+            AlertLevel::Fatal,
+            AlertDescription::CloseNotify
+        );
 
         unsafe {
             ktls::sys::send_ctrl_message(
@@ -121,26 +117,39 @@ where
     S: Session
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        while self.session.wants_read() {
-            let n = self.session.read_tls(&mut self.io.get_mut())?;
-            self.session.process_new_packets()
-                .map_err(|err| {
-                    let _ = self.io.flush();
-                    io::Error::new(io::ErrorKind::InvalidData, err)
-                })?;
-            if n == 0 {
-                break
-            }
-        }
-
-        match self.session.read(buf) {
+        match self.io.get_mut().read(buf) {
             Ok(n) => Ok(n),
-            Err(ref e) if e.kind() == io::ErrorKind::ConnectionAborted => {
-                self.is_shutdown = true;
-                let _ = self.send_close_notify();
-                Ok(0)
+            Err(ref err) if err.raw_os_error() == Some(5) => {
+                let mut buf2 = [0; 16 * 1024];
+                let n = unsafe {
+                    ktls::sys::recv_ctrl_message(
+                        self.io.get_mut(),
+                        &mut buf2
+                    )?
+                };
+                let record = Message::read_bytes(&buf2[..n])
+                    .and_then(|mut record| if record.decode_payload() {
+                        Some(record)
+                    } else {
+                        None
+                    })
+                    .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Unable to decode"))?;
+
+                if let MessagePayload::Alert(payload) = record.payload {
+                    match (payload.level, payload.description) {
+                        (AlertLevel::Fatal, AlertDescription::CloseNotify) => {
+                            let _ = self.send_close_notify();
+                            self.is_shutdown = true;
+                            return Ok(0);
+                        },
+                        (AlertLevel::Fatal, _) => return Ok(0),
+                        (..) => ()
+                    }
+                }
+
+                self.io.get_mut().read(buf)
             },
-            Err(e) => Err(e)
+            Err(err) => Err(err)
         }
     }
 }

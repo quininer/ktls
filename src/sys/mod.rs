@@ -12,6 +12,7 @@ pub const SOL_TCP: libc::c_int = 6;
 pub const SOL_TLS: libc::c_int = 282;
 pub const TLS_1_2_VERSION: libc::c_uint = 0x0303;
 
+const CMSG_LEN: usize = mem::size_of::<u8>();
 
 macro_rules! cmsg {
     ( align $len:expr ) => {
@@ -39,7 +40,7 @@ macro_rules! cmsg {
 pub unsafe fn start<Fd: AsRawFd>(
     socket: &mut Fd,
     tx: &tls12_crypto_info_aes_gcm_128,
-    _rx: &tls12_crypto_info_aes_gcm_128
+    rx: &tls12_crypto_info_aes_gcm_128
 ) -> io::Result<()> {
     const INFO_SIZE: usize = mem::size_of::<tls12_crypto_info_aes_gcm_128>();
 
@@ -53,11 +54,9 @@ pub unsafe fn start<Fd: AsRawFd>(
         return Err(io::Error::last_os_error());
     }
 
-    // TODO TLS_RX
-    //
-    // if libc::setsockopt(socket, SOL_TLS, TLS_RX as _, rx as *const _ as _, INFO_SIZE as _) < 0 {
-    //     return Err(io::Error::last_os_error());
-    // }
+    if libc::setsockopt(socket, SOL_TLS, TLS_RX as _, rx as *const _ as _, INFO_SIZE as _) < 0 {
+        return Err(io::Error::last_os_error());
+    }
 
     Ok(())
 }
@@ -65,8 +64,6 @@ pub unsafe fn start<Fd: AsRawFd>(
 pub unsafe fn send_ctrl_message<Fd: AsRawFd>(socket: &mut Fd, record_type: u8, data: &[u8])
     -> io::Result<usize>
 {
-    const CMSG_LEN: usize = mem::size_of::<u8>();
-
     let mut msg: libc::msghdr = mem::zeroed();
     let mut buf = [0; cmsg!(space CMSG_LEN)];
     let mut msg_iov: libc::iovec = mem::uninitialized();
@@ -91,8 +88,37 @@ pub unsafe fn send_ctrl_message<Fd: AsRawFd>(socket: &mut Fd, record_type: u8, d
     }
 }
 
-pub unsafe fn recv_ctrl_message() {
-    unimplemented!()
+pub unsafe fn recv_ctrl_message<Fd: AsRawFd>(socket: &mut Fd, record: &mut [u8]) -> io::Result<usize> {
+    const HEADER_LENGTH: usize = 5;
+
+    let mut msg: libc::msghdr = mem::zeroed();
+    let mut buf = [0; cmsg!(space CMSG_LEN)];
+    let mut msg_iov: libc::iovec = mem::uninitialized();
+
+    msg.msg_control = buf.as_mut_ptr() as *mut _;
+    msg.msg_controllen = mem::size_of_val(&buf);
+
+    msg_iov.iov_base = record.as_mut_ptr().add(HEADER_LENGTH) as *mut _;
+    msg_iov.iov_len = (record.len() - HEADER_LENGTH) as _;
+
+    msg.msg_iov = &mut msg_iov;
+    msg.msg_iovlen = 1;
+
+    match libc::recvmsg(socket.as_raw_fd(), &mut msg, 0) {
+        -1 => Err(io::Error::last_os_error()),
+        n => {
+            let cmsg: *mut libc::cmsghdr = cmsg!(firsthdr &msg);
+            if (*cmsg).cmsg_level == SOL_TLS && (*cmsg).cmsg_type == TLS_GET_RECORD_TYPE as _ {
+                record[0] = *cmsg!(data cmsg);
+                record[1] = TLS_1_2_VERSION_MAJOR as _;
+                record[2] = TLS_1_2_VERSION_MINOR as _;
+                NetworkEndian::write_u16(&mut record[3..][..2], n as u16);
+                Ok(n as usize + HEADER_LENGTH)
+            } else {
+                Err(io::Error::new(io::ErrorKind::Other, "Buffer contains application data"))
+            }
+        }
+    }
 }
 
 
