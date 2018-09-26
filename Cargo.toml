@@ -21,6 +21,7 @@ tokio = "0.1"
 rustls = "=0.13.0"
 tokio-rustls = "0.8.0-alpha"
 tokio-rusktls = { path = "tokio-rusktls" }
+tokio-linux-io = { git = "https://github.com/quininer/tokio-linux-io" }
 
 [replace]
 "tokio-rustls:0.8.0-alpha" = { git = "https://github.com/quininer/tokio-rustls", branch = "new-api" }

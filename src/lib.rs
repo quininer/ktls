@@ -88,6 +88,7 @@ where
         match self.io.read(buf) {
             Ok(n) => Ok(n),
             Err(ref err) if err.raw_os_error() == Some(5) => {
+                // FIXME too big?
                 let mut buf2 = [0; 16 * 1024];
                 let n = unsafe {
                     sys::recv_ctrl_message(&mut self.io, &mut buf2)?
@@ -98,11 +99,12 @@ where
                         let _ = self.send_close_notify();
                         return Ok(0);
                     },
+                    // FIXME return Error?
                     Some((Level::Fatal, _)) => return Ok(0),
                     _ => ()
                 }
 
-                self.io.read(buf)
+                self.read(buf)
             },
             Err(err) => Err(err)
         }

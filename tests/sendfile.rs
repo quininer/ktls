@@ -10,7 +10,8 @@ use tokio::runtime::current_thread;
 use tokio::net::{ TcpListener, TcpStream };
 use webpki::DNSNameRef;
 use tokio_rustls::{ TlsConnector, TlsAcceptor };
-use tokio_rusktls::{ KtlsStream, sendfile as ktls };
+use tokio_rusktls::KtlsStream;
+use tokio_linux_io as lio;
 
 
 #[test]
@@ -28,15 +29,15 @@ fn test_sendfile() {
             let done = listener.incoming()
                 .and_then(|sock| acceptor.accept(sock))
                 .and_then(|stream| {
-                    let (io, mut session) = stream.into_inner();
-                    KtlsStream::new(io, &mut session)
+                    let (io, session) = stream.into_inner();
+                    KtlsStream::new(io, &session)
                         .map_err(|err| err.error)
                 })
                 .and_then(|stream| aio::read_exact(stream, [0; 3]))
                 .and_then(|(stream, buf)| {
                     assert_eq!(&buf, b"aaa");
                     let fd = fs::File::open("Cargo.toml").unwrap();
-                    ktls::sendfile(stream, fd, ..22)
+                    lio::sendfile(stream, fd, ..22)
                 })
                 .and_then(|(stream, _)| aio::shutdown(stream))
                 .for_each(|_| Ok(()));

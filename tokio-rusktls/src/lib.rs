@@ -1,5 +1,4 @@
 mod common;
-pub mod sendfile;
 
 use std::io::{ self, Read, Write };
 use std::os::unix::io::{ AsRawFd, RawFd };
@@ -39,7 +38,7 @@ impl<IO> KtlsStream<IO>
 where
     IO: Read + Write + AsRawFd,
 {
-    pub fn new<S>(io: IO, session: &mut S)
+    pub fn new<S>(io: IO, session: &S)
         -> Result<Self, ktls::Error<IO>>
         where S: Session + IsClient
     {
@@ -136,7 +135,6 @@ where
             self.is_shutdown = true;
         }
 
-        try_async!(self.io.flush());
         self.io.get_mut().shutdown()
     }
 }

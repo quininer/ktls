@@ -27,7 +27,7 @@ TcpStream::connect(&addr)
 	.and_then(|sock| connector.connect(dnsname, sock))
 	.and_then(|stream| {
 		let (io, session) = stream.into_inner();
-		KtlsStream::new(io, session)
+		KtlsStream::new(io, &session)
 			.map_err(|err| err.error)
 	})
 

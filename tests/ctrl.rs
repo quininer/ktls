@@ -76,8 +76,8 @@ fn test_alert() {
     let done = TcpStream::connect(&addr)
         .and_then(move |sock| connector.connect(dnsname, sock))
         .and_then(|stream| {
-            let (io, mut session) = stream.into_inner();
-            KtlsStream::new(io, &mut session)
+            let (io, session) = stream.into_inner();
+            KtlsStream::new(io, &session)
                 .map_err(|err| err.error)
         })
         .and_then(|stream| unsafe {
