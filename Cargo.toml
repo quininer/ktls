@@ -1,10 +1,11 @@
 [package]
 name = "ktls"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["quininer <quininer@live.com>"]
 license = "MIT"
 description = "Linux Kernel TLS for Rust."
 categories = ["cryptography", "network-programming"]
+keywords = ["linux", "zero-copy", "ktls"]
 edition = "2018"
 
 [workspace]
@@ -18,11 +19,10 @@ byteorder = "1"
 webpki = "0.18"
 webpki-roots = "0.15"
 tokio = "0.1"
-rustls = "=0.13.0"
-tokio-rustls = "0.8.0-alpha"
-tokio-rusktls = { path = "tokio-rusktls" }
-tokio-linux-io = { git = "https://github.com/quininer/tokio-linux-io" }
+rustls = "0.14.0"
+tokio-rustls = "0.8.0"
+tokio-rusktls = { version = "=0.0.1", path = "tokio-rusktls" }
+tokio-linux-zio = "0.1"
 
 [replace]
-"tokio-rustls:0.8.0-alpha" = { git = "https://github.com/quininer/tokio-rustls", branch = "new-api" }
-"rustls:0.13.0" = { git = "https://github.com/quininer/rustls", branch = "ktls" }
+"rustls:0.14.0" = { git = "https://github.com/quininer/rustls", branch = "ktls2" }

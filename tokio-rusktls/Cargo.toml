@@ -1,6 +1,6 @@
 [package]
 name = "tokio-rusktls"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["quininer <quininer@live.com>"]
 license = "MIT"
 description = "Rustls + KTLS support for Tokio."
@@ -11,6 +11,6 @@ edition = "2018"
 libc = "0.2"
 bytes = "0.4"
 tokio = "0.1"
-rustls = "=0.13.0"
+rustls = "0.14.0"
 ktls = { path = ".." }
 if_chain = "0.1"

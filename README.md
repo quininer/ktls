@@ -39,4 +39,4 @@ Other algorithms will return `Error`.
 
 ### License
 
-This project is licensed under the MIT license.
+This project is licensed under [the MIT license](LICENSE).

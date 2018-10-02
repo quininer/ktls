@@ -11,7 +11,7 @@ use tokio::net::{ TcpListener, TcpStream };
 use webpki::DNSNameRef;
 use tokio_rustls::{ TlsConnector, TlsAcceptor };
 use tokio_rusktls::KtlsStream;
-use tokio_linux_io as lio;
+use tokio_linux_zio as zio;
 
 
 #[test]
@@ -37,9 +37,9 @@ fn test_sendfile() {
                 .and_then(|(stream, buf)| {
                     assert_eq!(&buf, b"aaa");
                     let fd = fs::File::open("Cargo.toml").unwrap();
-                    lio::sendfile(stream, fd, ..22)
+                    zio::sendfile(stream, fd, ..22)
                 })
-                .and_then(|(stream, _)| aio::shutdown(stream))
+                .and_then(|(stream, ..)| aio::shutdown(stream))
                 .for_each(|_| Ok(()));
 
             current_thread::block_on_all(done).unwrap();
