@@ -1,6 +1,6 @@
 mod common;
 
-use std::{ thread, fs };
+use std::{ thread, io };
 use std::net::SocketAddr;
 use std::sync::mpsc::channel;
 use tokio::prelude::*;
@@ -11,11 +11,11 @@ use webpki::DNSNameRef;
 use tokio_rustls::{ TlsConnector, TlsAcceptor };
 use tokio_rusktls::KtlsStream;
 use tokio_linux_zio as zio;
-use self::common::{ get_client_config, get_server_config };
+use self::common::{ get_client_config, get_server_config, split };
 
 
 #[test]
-fn test_sendfile() {
+fn test_splice() {
     fn run_server() -> SocketAddr {
         let acceptor = TlsAcceptor::from(get_server_config());
         let (send, recv) = channel();
@@ -33,13 +33,24 @@ fn test_sendfile() {
                     KtlsStream::new(io, &session)
                         .map_err(|err| err.error)
                 })
-                .and_then(|stream| aio::read_exact(stream, [0; 3]))
-                .and_then(|(stream, buf)| {
-                    assert_eq!(&buf, b"aaa");
-                    let fd = fs::File::open("Cargo.toml").unwrap();
-                    zio::sendfile(stream, fd, ..22)
+                .and_then(|kstream| zio::pipe()
+                    .map(move |pipes| (pipes, kstream)))
+                .and_then(|((pr, pw), kstream)| {
+                    let (r, w) = split(kstream);
+
+                    zio::splice(r, pw, None)
+                        .map(drop)
+                        .select2(zio::splice(pr, w, None).map(drop))
+                        .map_err(|res| res.split().0)
+                        .map(drop)
+
+                        // ignore rst
+                        .or_else(|err| if err.kind() == io::ErrorKind::ConnectionReset {
+                            Ok(())
+                        } else {
+                            Err(err)
+                        })
                 })
-                .and_then(|(stream, ..)| aio::shutdown(stream))
                 .for_each(|_| Ok(()));
 
             current_thread::block_on_all(done).unwrap();
@@ -53,16 +64,14 @@ fn test_sendfile() {
     let dnsname = DNSNameRef::try_from_ascii_str("localhost").unwrap();
     let connector = TlsConnector::from(get_client_config());
 
-    let mut fd = fs::File::open("Cargo.toml").unwrap();
-    let mut buf = [0; 22];
-    fd.read_exact(&mut buf).unwrap();
+    let input = b"hello world!";
 
     let done = TcpStream::connect(&addr)
         .and_then(move |sock| connector.connect(dnsname, sock))
-        .and_then(|stream| aio::write_all(stream, b"aaa"))
-        .and_then(|(stream, _)| aio::read_to_end(stream, Vec::new()))
+        .and_then(|stream| aio::write_all(stream, input))
+        .and_then(|(stream, input)| aio::read_exact(stream, vec![0; input.len()]))
         .map(|(_, buf)| buf);
 
-    let buf2 = current_thread::block_on_all(done).unwrap();
-    assert_eq!(buf2, buf);
+    let output = current_thread::block_on_all(done).unwrap();
+    assert_eq!(output, input);
 }
